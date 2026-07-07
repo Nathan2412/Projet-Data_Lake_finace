@@ -99,7 +99,7 @@ Consignes du devoir :
 
 **Actions S&P 500** : AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA, BRK-B, JPM, JNJ  
 **Indices** : ^GSPC (S&P500), ^DJI (Dow Jones), ^IXIC (Nasdaq), ^RUT (Russell 2000)
-
+ 
 ---
 
 ## Installation et démarrage
