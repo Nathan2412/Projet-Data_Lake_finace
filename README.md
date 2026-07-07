@@ -17,7 +17,25 @@ Livrables principaux :
 
 - [Rapport technique PDF](livrables/Rapport_DataLake_Finance_Artemie_Smogunov_Nathan_Smadja-Tubiana_Patrice_Ignongui.pdf)
 - [Documentation technique PDF](livrables/Documentation_Technique_DataLake_Finance_Artemie_Smogunov_Nathan_Smadja-Tubiana_Patrice_Ignongui.pdf)
-- [Benchmark avance JSON](livrables/benchmark_ingest_vs_ingest_fast.json)
+- [Benchmark avancé JSON](livrables/benchmark_ingest_vs_ingest_fast.json)
+
+Consignes du devoir :
+
+- [Sujet original EFREI Data Lakes 2025-2026](consignes/Data_Lakes_Projet_Final_EFREI_2025-2026.pdf)
+- [Résumé des règles et conformité du projet](consignes/resume_regles_devoir.txt)
+
+### Conformité aux règles du devoir
+
+| Règle demandée | Réponse dans ce projet |
+|----------------|------------------------|
+| Thème unique choisi | Finance uniquement : données de marché Yahoo Finance |
+| Deux sources de données | Dataset CSV local + API yfinance |
+| Zones Data Lake | Raw, Staging et Curated |
+| Stockage Raw | MinIO/S3 pour les fichiers bruts + Elasticsearch pour la recherche |
+| Orchestration | DAG Airflow `financial_data_lake_pipeline` |
+| API Gateway | FastAPI avec `/raw`, `/staging`, `/curated`, `/health`, `/stats` |
+| Partie avancée | `/ingest`, `/ingest_fast` et benchmark avec gain supérieur à 30 % |
+| Livrables | README de lancement, rapport technique PDF, documentation technique PDF, membres du groupe indiqués |
 
 ---
 

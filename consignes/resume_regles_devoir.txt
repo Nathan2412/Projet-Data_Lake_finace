@@ -1,0 +1,58 @@
+REGLES DU DEVOIR - DATA LAKES & DATA INTEGRATION
+Projet final EFREI 2025-2026
+
+Document source :
+- consignes/Data_Lakes_Projet_Final_EFREI_2025-2026.pdf
+
+Exigences principales du sujet :
+
+1. Concevoir et implementer un Data Lake de bout en bout.
+   Le projet doit couvrir l'ingestion, le stockage, les transformations et
+   l'exposition des donnees.
+
+2. Structurer le Data Lake en zones.
+   La structure raw / staging / curated est autorisee et retenue dans ce projet.
+
+3. Utiliser Elasticsearch ou un stockage type S3 pour la zone raw.
+   Le projet utilise MinIO, compatible S3, et Elasticsearch pour la zone raw.
+
+4. Utiliser deux sources de donnees.
+   Le projet utilise :
+   - un dataset fichier local : data/finance_dataset.csv ;
+   - une API : Yahoo Finance via yfinance.
+
+5. Mettre en place une pipeline d'integration.
+   Le projet utilise Apache Airflow avec le DAG financial_data_lake_pipeline,
+   planifie du lundi au vendredi a 6h UTC.
+
+6. Exposer une API Gateway.
+   Les endpoints demandes sont presents :
+   - /raw
+   - /staging
+   - /curated
+   - /health
+   - /stats
+
+7. Niveau avance optionnel.
+   Le projet implemente :
+   - POST /ingest ;
+   - POST /ingest_fast ;
+   - un benchmark batch 1 et batch 100 ;
+   - une amelioration superieure a 30% pour /ingest_fast.
+
+8. Livrables attendus.
+   Le rendu doit contenir :
+   - un depot GitHub/GitLab avec README permettant de lancer le projet ;
+   - un rapport technique PDF ou une video ;
+   - les membres du groupe, maximum 3.
+
+Membres du groupe :
+- Artemie Smogunov
+- Nathan Smadja-Tubiana
+- Patrice Ignongui
+
+Correspondance dans ce depot :
+- README.md : procedure d'installation, architecture, endpoints et benchmark.
+- livrables/Rapport_DataLake_Finance_Artemie_Smogunov_Nathan_Smadja-Tubiana_Patrice_Ignongui.pdf
+- livrables/Documentation_Technique_DataLake_Finance_Artemie_Smogunov_Nathan_Smadja-Tubiana_Patrice_Ignongui.pdf
+- livrables/benchmark_ingest_vs_ingest_fast.json
