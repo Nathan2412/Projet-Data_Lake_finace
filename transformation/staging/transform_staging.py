@@ -7,6 +7,8 @@ Pour chaque ticker :
 3. Calcule les indicateurs techniques : SMA, EMA, RSI, MACD, Bollinger, volatilité
 4. Écrit dans la table staging_ohlcv (PostgreSQL)
 """
+from __future__ import annotations
+
 import logging
 import sys
 import os
@@ -50,7 +52,9 @@ def calc_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     avg_gain = gain.ewm(com=period - 1, min_periods=period).mean()
     avg_loss = loss.ewm(com=period - 1, min_periods=period).mean()
     rs = avg_gain / avg_loss.replace(0, np.nan)
-    return 100 - (100 / (1 + rs))
+    rsi = 100 - (100 / (1 + rs))
+    rsi = rsi.mask((avg_loss == 0) & (avg_gain > 0), 100.0)
+    return rsi.mask((avg_loss == 0) & (avg_gain == 0), 50.0)
 
 
 def calc_macd(series: pd.Series) -> tuple[pd.Series, pd.Series]:

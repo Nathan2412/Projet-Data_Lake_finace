@@ -9,8 +9,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Code de l'API et modules partagés
 COPY api/           /app/
 COPY config/        /app/config/
+COPY data/          /app/data/
 COPY ingestion/     /app/ingestion/
 COPY transformation/ /app/transformation/
+COPY tests/          /app/tests/
 
 EXPOSE 8000
 

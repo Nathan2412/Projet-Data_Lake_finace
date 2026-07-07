@@ -5,14 +5,30 @@ Projet final — cours Data Lakes & Data Integration, EFREI 2025-2026.
 
 ---
 
+## Equipe et livrables
+
+Membres du groupe :
+
+- Artemie Smogunov
+- Nathan Smadja-Tubiana
+- Patrice Ignongui
+
+Livrables principaux :
+
+- [Rapport technique PDF](livrables/Rapport_DataLake_Finance_Artemie_Smogunov_Nathan_Smadja-Tubiana_Patrice_Ignongui.pdf)
+- [Documentation technique PDF](livrables/Documentation_Technique_DataLake_Finance_Artemie_Smogunov_Nathan_Smadja-Tubiana_Patrice_Ignongui.pdf)
+- [Benchmark avance JSON](livrables/benchmark_ingest_vs_ingest_fast.json)
+
+---
+
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Sources de données                                              │
 │  ┌──────────────────┐     ┌──────────────────────────────────┐  │
-│  │ yfinance fichier │     │ yfinance API (polling quotidien) │  │
-│  │ (dataset CSV)    │     │ via Airflow scheduler            │  │
+│  │ Dataset CSV AAPL │     │ yfinance API (polling quotidien) │  │
+│  │ (2022-2024)      │     │ via Airflow scheduler            │  │
 │  └────────┬─────────┘     └──────────────┬───────────────────┘  │
 └───────────┼──────────────────────────────┼─────────────────────┘
             │                              │
@@ -229,18 +245,28 @@ Même interface que `/ingest`. Retourne en plus le champ `optimizations` :
 | Technique              | Description                                         | Gain estimé |
 |------------------------|-----------------------------------------------------|-------------|
 | **ThreadPoolExecutor** | 8 threads pour le download yfinance en parallèle   | ~60-70%     |
-| **Cache Redis**        | Skip les tickers récents (TTL 5 min)               | 100% si hit  |
+| **Cache Redis**        | Option `use_cache=true` (TTL 5 min, hors benchmark) | 100% si hit  |
 | **NumPy vectorisé**    | Indicateurs sans boucles Python (EMA custom NumPy) | ~20-30%     |
 | **Bulk ES**            | Une seule requête pour tout le batch               | ~40%        |
 | **execute_values PG**  | Batch unique au lieu de execute_batch              | ~15-20%     |
 | **Upload MinIO parallèle** | Threads I/O pour les uploads CSV              | ~50%        |
 
-### Résultats de benchmark (batch de 1 et 100 tickers)
+### Protocole de benchmark (batch de 1 et 100 tickers)
 
-| Batch      | `/ingest` (ms) | `/ingest_fast` (ms) | Gain    |
-|------------|----------------|---------------------|---------|
-| 1 ticker   | ~2 000         | ~1 300              | ~35%    |
-| 10 tickers | ~18 000        | ~7 000              | ~61%    |
+Les mesures doivent être réalisées avec `use_cache=false`, le même `period` et les
+mêmes options de transformation pour les deux endpoints. Le script
+`scripts/benchmark_endpoints.py` produit un rapport JSON horodaté pour les lots de 1
+et 100 tickers.
+
+Mesure du 28 juin 2026, période `5d`, pipeline complet, cache désactivé :
+
+| Batch | `/ingest` (ms) | `/ingest_fast` (ms) | Gain |
+|-------|----------------:|---------------------:|-----:|
+| 1 ticker | 3 010,30 | 1 762,89 | 41,44 % |
+| 100 tickers | 43 164,81 | 25 078,83 | 41,90 % |
+
+Les deux exécutions se sont terminées avec le statut `success` et zéro erreur. Les
+valeurs détaillées sont conservées dans `benchmarks/benchmark_results.json`.
 
 > Les temps varient selon la latence réseau vers Yahoo Finance.
 
@@ -254,7 +280,7 @@ financial-data-lake/
 ├── config/
 │   └── settings.py              # Configuration centralisée
 ├── ingestion/
-│   ├── ingest_file.py           # Source 1 : dataset fichier yfinance
+│   ├── ingest_file.py           # Source 1 : dataset CSV local versionné
 │   └── ingest_api.py            # Source 2 : API Yahoo Finance (polling)
 ├── transformation/
 │   ├── staging/

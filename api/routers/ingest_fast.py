@@ -11,8 +11,6 @@ Optimisations appliquées :
 """
 import logging
 import time
-import hashlib
-import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Optional
@@ -74,8 +72,6 @@ def compute_indicators_vectorized(df: pd.DataFrame) -> pd.DataFrame:
     """
     close  = df["close"].values.astype(float)
     volume = df["volume"].values.astype(float)
-    n      = len(close)
-
     # SMA (rolling mean via stride tricks)
     df["sma_20"]  = pd.Series(close).rolling(20, min_periods=1).mean().values
     df["sma_50"]  = pd.Series(close).rolling(50, min_periods=1).mean().values
@@ -90,23 +86,27 @@ def compute_indicators_vectorized(df: pd.DataFrame) -> pd.DataFrame:
     df["macd_signal"]  = _ema_numpy(macd, 9)
 
     # RSI (vectorisé)
-    delta     = np.diff(close, prepend=close[0])
-    gain      = np.where(delta > 0, delta, 0.0)
-    loss      = np.where(delta < 0, -delta, 0.0)
+    delta = np.diff(close, prepend=np.nan)
+    gain = np.where(np.isnan(delta), np.nan, np.maximum(delta, 0.0))
+    loss = np.where(np.isnan(delta), np.nan, np.maximum(-delta, 0.0))
     avg_gain  = pd.Series(gain).ewm(com=13, min_periods=14).mean().values
     avg_loss  = pd.Series(loss).ewm(com=13, min_periods=14).mean().values
-    rs        = np.where(avg_loss != 0, avg_gain / avg_loss, np.nan)
-    df["rsi_14"] = 100 - (100 / (1 + rs))
+    rs = np.divide(avg_gain, avg_loss, out=np.full_like(avg_gain, np.nan), where=avg_loss != 0)
+    rsi = 100 - (100 / (1 + rs))
+    rsi = np.where((avg_loss == 0) & (avg_gain > 0), 100.0, rsi)
+    df["rsi_14"] = np.where((avg_loss == 0) & (avg_gain == 0), 50.0, rsi)
 
     # Bollinger Bands
     roll        = pd.Series(close).rolling(20, min_periods=1)
     sma20       = roll.mean().values
-    std20       = roll.std(ddof=0).fillna(0).values
+    std20       = roll.std().values
     df["bollinger_upper"] = sma20 + 2 * std20
     df["bollinger_lower"] = sma20 - 2 * std20
 
     # Returns et volatilité
-    ret             = np.diff(close, prepend=np.nan) / np.where(close != 0, close, np.nan)
+    previous_close = np.roll(close, 1)
+    previous_close[0] = np.nan
+    ret = (close - previous_close) / previous_close
     df["daily_return"]  = ret
     df["volatility_20"] = pd.Series(ret).rolling(20, min_periods=1).std().values
 
@@ -184,11 +184,21 @@ def _upsert_staging_fast(conn, all_dfs: list[pd.DataFrame]) -> int:
             bollinger_upper, bollinger_lower, daily_return, volatility_20
         ) VALUES %s
         ON CONFLICT (ticker, date) DO UPDATE SET
+            open          = EXCLUDED.open,
+            high          = EXCLUDED.high,
+            low           = EXCLUDED.low,
             close         = EXCLUDED.close,
+            adj_close     = EXCLUDED.adj_close,
+            volume        = EXCLUDED.volume,
             sma_20        = EXCLUDED.sma_20,
             sma_50        = EXCLUDED.sma_50,
+            ema_12        = EXCLUDED.ema_12,
+            ema_26        = EXCLUDED.ema_26,
             rsi_14        = EXCLUDED.rsi_14,
             macd          = EXCLUDED.macd,
+            macd_signal   = EXCLUDED.macd_signal,
+            bollinger_upper = EXCLUDED.bollinger_upper,
+            bollinger_lower = EXCLUDED.bollinger_lower,
             daily_return  = EXCLUDED.daily_return,
             volatility_20 = EXCLUDED.volatility_20,
             ingested_at   = NOW()
@@ -248,6 +258,7 @@ def ingest_fast(body: IngestFastRequest) -> IngestFastResponse:
     period      = body.data.get("period", "1mo")
     run_staging = body.data.get("run_staging", True)
     run_curated = body.data.get("run_curated", True)
+    use_cache   = body.data.get("use_cache", False)
 
     if not tickers:
         raise HTTPException(status_code=422, detail="Le champ 'tickers' est requis")
@@ -271,8 +282,9 @@ def ingest_fast(body: IngestFastRequest) -> IngestFastResponse:
     redis_client = get_redis()
 
     # Séparer les tickers cachés des non-cachés
-    cached_tickers    = [t for t in tickers if _is_cached(redis_client, t, period)]
-    to_fetch_tickers  = [t for t in tickers if not _is_cached(redis_client, t, period)]
+    cached_tickers = [t for t in tickers if use_cache and _is_cached(redis_client, t, period)]
+    cached_set = set(cached_tickers)
+    to_fetch_tickers = [t for t in tickers if t not in cached_set]
     optimizations["redis_cache_hits"] = len(cached_tickers)
 
     downloaded_dfs: dict[str, pd.DataFrame] = {}
@@ -320,7 +332,10 @@ def ingest_fast(body: IngestFastRequest) -> IngestFastResponse:
                         "ticker":      ticker,
                         "date":        row["date"],
                         "open":        float(row["open"])   if pd.notna(row.get("open"))   else None,
+                        "high":        float(row["high"])   if pd.notna(row.get("high"))   else None,
+                        "low":         float(row["low"])    if pd.notna(row.get("low"))    else None,
                         "close":       float(row["close"])  if pd.notna(row.get("close"))  else None,
+                        "adj_close":   float(row["adj_close"]) if pd.notna(row.get("adj_close")) else None,
                         "volume":      int(row["volume"])   if pd.notna(row.get("volume")) else None,
                         "source":      "yfinance_fast",
                         "ingested_at": now_iso,

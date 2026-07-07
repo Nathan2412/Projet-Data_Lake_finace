@@ -94,20 +94,30 @@ def get_anomalies_summary() -> dict:
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT
-                    ticker,
-                    COUNT(*) FILTER (WHERE is_anomaly) AS anomaly_count,
-                    COUNT(*) AS total_rows,
-                    ROUND(100.0 * COUNT(*) FILTER (WHERE is_anomaly) / NULLIF(COUNT(*), 0), 2) AS anomaly_rate_pct,
-                    MAX(date) FILTER (WHERE is_anomaly) AS last_anomaly_date,
-                    json_object_agg(anomaly_type, cnt) AS anomaly_breakdown
-                FROM (
-                    SELECT ticker, date, is_anomaly, anomaly_type,
-                           COUNT(*) OVER (PARTITION BY ticker, anomaly_type) AS cnt
+                WITH totals AS (
+                    SELECT ticker,
+                           COUNT(*) FILTER (WHERE is_anomaly) AS anomaly_count,
+                           COUNT(*) AS total_rows,
+                           MAX(date) FILTER (WHERE is_anomaly) AS last_anomaly_date
                     FROM curated_analysis
-                ) sub
-                GROUP BY ticker
-                ORDER BY anomaly_count DESC
+                    GROUP BY ticker
+                ), breakdown AS (
+                    SELECT ticker, anomaly_type, COUNT(*) AS count
+                    FROM curated_analysis
+                    WHERE is_anomaly AND anomaly_type IS NOT NULL
+                    GROUP BY ticker, anomaly_type
+                ), breakdown_json AS (
+                    SELECT ticker, json_object_agg(anomaly_type, count) AS anomaly_breakdown
+                    FROM breakdown
+                    GROUP BY ticker
+                )
+                SELECT t.ticker, t.anomaly_count, t.total_rows,
+                       ROUND(100.0 * t.anomaly_count / NULLIF(t.total_rows, 0), 2) AS anomaly_rate_pct,
+                       t.last_anomaly_date,
+                       COALESCE(b.anomaly_breakdown, '{}'::json) AS anomaly_breakdown
+                FROM totals t
+                LEFT JOIN breakdown_json b USING (ticker)
+                ORDER BY t.anomaly_count DESC
             """)
             cols = [d[0] for d in cur.description]
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]
@@ -130,11 +140,15 @@ def get_active_signals() -> dict:
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT DISTINCT ON (ticker)
-                    ticker, date, close, rsi_14, signal, price_trend, is_anomaly
-                FROM curated_analysis
+                SELECT ticker, date, close, rsi_14, signal, price_trend, is_anomaly
+                FROM (
+                    SELECT DISTINCT ON (ticker)
+                           ticker, date, close, rsi_14, signal, price_trend, is_anomaly
+                    FROM curated_analysis
+                    ORDER BY ticker, date DESC
+                ) latest
                 WHERE signal IN ('buy', 'sell')
-                ORDER BY ticker, date DESC
+                ORDER BY ticker
             """)
             cols = [d[0] for d in cur.description]
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]

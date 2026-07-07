@@ -1,6 +1,12 @@
 """Configuration centralisée du data lake financier."""
 import os
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FINANCIAL_DATASET_PATH = os.getenv(
+    "FINANCIAL_DATASET_PATH",
+    os.path.join(PROJECT_ROOT, "data", "finance_dataset.csv"),
+)
+
 # ── PostgreSQL ─────────────────────────────────────────────────────────────
 POSTGRES = {
     "host":     os.getenv("POSTGRES_HOST", "localhost"),

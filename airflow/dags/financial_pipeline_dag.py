@@ -45,6 +45,8 @@ def task_ingest_file(**context) -> dict:
     context["ti"].xcom_push(key="ingest_file_results", value=results)
     if results["errors"]:
         log.warning("Ingestion fichier : %d erreurs", len(results["errors"]))
+    if not results["success"]:
+        raise RuntimeError("Ingestion fichier sans aucun succes")
     return results
 
 
@@ -55,6 +57,8 @@ def task_ingest_api(**context) -> dict:
     context["ti"].xcom_push(key="ingest_api_results", value=results)
     if results["errors"]:
         log.warning("Ingestion API : %d erreurs", len(results["errors"]))
+    if not results["success"]:
+        raise RuntimeError("Ingestion API sans aucun succes")
     return results
 
 
@@ -110,7 +114,7 @@ def task_log_pipeline_summary(**context) -> None:
     curat_res  = ti.xcom_pull(task_ids="transform_curated",  key="curated_results")     or {}
 
     summary = {
-        "execution_date":      str(context["execution_date"]),
+        "logical_date":        str(context["logical_date"]),
         "ingestion_file":      {"success": len(file_res.get("success", [])), "errors": len(file_res.get("errors", []))},
         "ingestion_api":       {"success": len(api_res.get("success",  [])), "errors": len(api_res.get("errors",  []))},
         "staging_processed":   stag_res.get("processed", 0),

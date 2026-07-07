@@ -1,0 +1,28 @@
+{
+  "measured_at": "2026-06-28T12:56:34.604407+00:00",
+  "base_url": "http://localhost:8000",
+  "period": "5d",
+  "cache_enabled": false,
+  "results": [
+    {
+      "batch_size": 1,
+      "standard_wall_ms": 3010.3,
+      "fast_wall_ms": 1762.89,
+      "gain_pct": 41.44,
+      "standard_status": "success",
+      "fast_status": "success",
+      "standard_errors": [],
+      "fast_errors": []
+    },
+    {
+      "batch_size": 100,
+      "standard_wall_ms": 43164.81,
+      "fast_wall_ms": 25078.83,
+      "gain_pct": 41.9,
+      "standard_status": "success",
+      "fast_status": "success",
+      "standard_errors": [],
+      "fast_errors": []
+    }
+  ]
+}

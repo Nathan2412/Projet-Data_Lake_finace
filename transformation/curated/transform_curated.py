@@ -9,6 +9,8 @@ Pour chaque ticker :
 4. Calcule la tendance de prix et le signal de trading simplifié
 5. Écrit dans curated_analysis (PostgreSQL)
 """
+from __future__ import annotations
+
 import logging
 import sys
 import os

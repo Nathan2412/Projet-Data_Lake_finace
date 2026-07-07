@@ -5,6 +5,8 @@ Ingestion depuis l'API Yahoo Finance via yfinance (source 2 : API polling).
 - Indexe dans Elasticsearch avec métadonnées d'ingestion
 - Conçu pour être appelé par l'Airflow scheduler quotidiennement
 """
+from __future__ import annotations
+
 import io
 import json
 import logging

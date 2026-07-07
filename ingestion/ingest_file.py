@@ -1,9 +1,11 @@
 """
-Ingestion depuis un dataset fichier yfinance (source 1 : dataset fichier).
-- Télécharge l'historique complet de tous les tickers configurés
+Ingestion depuis un dataset CSV local (source 1 : dataset fichier).
+- Lit un instantané financier versionné et reproductible
 - Stocke les CSV bruts dans MinIO (bucket raw-financial-data)
 - Indexe chaque ligne dans Elasticsearch pour la recherche
 """
+from __future__ import annotations
+
 import io
 import json
 import logging
@@ -21,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import (
     MINIO, MINIO_BUCKET_RAW_FILE,
     ES_URL, ES_INDEX_RAW,
-    ALL_TICKERS, DEFAULT_PERIOD, DEFAULT_INTERVAL,
+    ALL_TICKERS, DEFAULT_PERIOD, DEFAULT_INTERVAL, FINANCIAL_DATASET_PATH,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -86,6 +88,37 @@ def fetch_ticker_data(ticker: str, period: str, interval: str) -> pd.DataFrame:
         raise
 
 
+def load_file_dataset(dataset_path: str = FINANCIAL_DATASET_PATH) -> pd.DataFrame:
+    """Charge et valide le dataset financier CSV utilise comme source fichier."""
+    if not os.path.exists(dataset_path):
+        raise FileNotFoundError(
+            f"Dataset fichier introuvable : {dataset_path}. "
+            "Ajoutez data/finance_dataset.csv ou configurez FINANCIAL_DATASET_PATH."
+        )
+
+    df = pd.read_csv(dataset_path)
+    df.columns = [str(col).strip().lower().replace(" ", "_") for col in df.columns]
+    required = {"ticker", "date", "open", "high", "low", "close", "volume"}
+    missing = sorted(required.difference(df.columns))
+    if missing:
+        raise ValueError(f"Colonnes manquantes dans le dataset fichier : {missing}")
+
+    df["ticker"] = df["ticker"].astype(str).str.strip().str.upper()
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    for col in ["open", "high", "low", "close", "volume"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    if "adj_close" not in df.columns:
+        df["adj_close"] = df["close"]
+    else:
+        df["adj_close"] = pd.to_numeric(df["adj_close"], errors="coerce")
+
+    df = df.dropna(subset=["ticker", "date", "close"])
+    df = df.sort_values(["ticker", "date"]).drop_duplicates(["ticker", "date"], keep="last")
+    if df.empty:
+        raise ValueError("Le dataset fichier ne contient aucune ligne valide")
+    return df.reset_index(drop=True)
+
+
 def upload_to_minio(minio_client: Minio, ticker: str, df: pd.DataFrame) -> str:
     """Sérialise le DataFrame en CSV et l'upload dans MinIO."""
     csv_buffer = io.BytesIO(df.to_csv(index=False).encode("utf-8"))
@@ -137,12 +170,15 @@ def ingest_file_source(
     tickers: list[str] | None = None,
     period: str = DEFAULT_PERIOD,
     interval: str = DEFAULT_INTERVAL,
+    dataset_path: str = FINANCIAL_DATASET_PATH,
 ) -> dict:
     """
-    Point d'entrée principal pour l'ingestion fichier.
+    Point d'entrée principal pour l'ingestion du dataset CSV.
     Retourne un résumé des opérations effectuées.
     """
-    tickers = tickers or ALL_TICKERS
+    dataset = load_file_dataset(dataset_path)
+    available_tickers = dataset["ticker"].drop_duplicates().tolist()
+    tickers = [ticker.upper() for ticker in tickers] if tickers else available_tickers
     minio_client = get_minio_client()
     es = get_es_client()
     ensure_es_index(es)
@@ -152,7 +188,9 @@ def ingest_file_source(
     for ticker in tickers:
         try:
             log.info("=== Ingestion fichier : %s ===", ticker)
-            df = fetch_ticker_data(ticker, period, interval)
+            df = dataset.loc[dataset["ticker"] == ticker].copy()
+            if df.empty:
+                raise ValueError(f"Ticker absent du dataset fichier : {ticker}")
             object_name = upload_to_minio(minio_client, ticker, df)
             indexed = index_to_elasticsearch(es, df)
             results["success"].append({
